@@ -129,6 +129,12 @@ class StoreModel
     return null;
 }
 
+	public function addCategory(Category $category): ?int
+	{
+		$dbHelper = new CategoryDao();
+		return $dbHelper->insert($category);
+	}
+
 
 
 
@@ -242,4 +248,11 @@ class StoreModel
 		$dbHelper = new UserDao();
 		return $dbHelper->selectWhereUsernameAndPassword($username,  $password);
 	}
+
+	public function updateStock(WarehouseProduct $warehouseProduct): int
+	{
+		$dbHelper = new WarehouseProductDao();
+		return $dbHelper->updateStock($warehouseProduct);
+	}
+
 }

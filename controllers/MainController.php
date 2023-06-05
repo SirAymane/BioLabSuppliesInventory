@@ -106,6 +106,9 @@ class MainController
             case 'category':
                 $this->doCategoryMng();
                 break;
+            case 'category/add':
+                $this->doCategoryAddForm();
+                break;
             case 'category/edit':
                 $this->doCategoryEditForm("edit");
                 break;
@@ -171,7 +174,7 @@ class MainController
      */
     private function doPost()
     {
-        
+
         //process action.
         switch ($this->action) {
             case 'user/role':
@@ -195,12 +198,15 @@ class MainController
             case 'product/edit':
                 $this->doProductEditForm("edit");
                 break;
-                case 'product/search':
-                    $this->doListProductsByCategory();
-                    break;
-                case 'product/modify':
-                    $this->doProductModify();
-                    break;
+            case 'product/search':
+                $this->doListProductsByCategory();
+                break;
+            case 'product/modify':
+                $this->doProductModify();
+                break;
+            case 'category/add':
+                $this->doCategoryAdd();
+                break;
             case 'category/modify':
                 $this->doCategoryModify();
                 break;
@@ -264,8 +270,7 @@ class MainController
 
     /**
      * Checks either the user is logged in or not. 
-     * Set as protected for security
-     * This function can be used for any tab log required.
+     * This function can be used for any views where log is required.
      * @return void
      */
     protected function checkLoggedIn()
@@ -279,7 +284,7 @@ class MainController
 
     /**
      * Checks either the user logged is admin or not
-     * This function is called only on the admin required tabs.
+     * This function is called only on the admin required views.
      * @return void
      */
     public function checkAdminRole()
@@ -289,8 +294,6 @@ class MainController
             exit();
         }
     }
-
-
 
 
 
@@ -461,6 +464,27 @@ class MainController
     }
 
 
+    public function doCategoryAddForm()
+    {
+        $data = array();
+        $data['mode'] = 'add';
+        $this->view->show("category/categorydetail.php", $data);
+    }
+
+    public function doCategoryAdd()
+    {
+        $category = Validator::validateCategory(INPUT_POST);
+        if (!is_null($category)) { // Validate the category
+            $result = $this->model->addCategory($category);
+            $message = ($result > 0) ? "Successfully added" : "Error adding";
+            $this->view->show("category/categorydetail.php", ['mode' => 'add', 'message' => $message, 'category' => $category]);
+        } else {
+            $message = "Invalid data";
+            $this->view->show("category/categorydetail.php", ['mode' => 'add', 'message' => $message]);
+        }
+    }
+
+
 
     public function doCategoryEditForm(string $mode)
     {
@@ -494,49 +518,6 @@ class MainController
     }
 
 
-    public function doCategoryRemove()
-    {
-        $category = Validator::validateCategory(INPUT_POST);
-        if (!is_null($category)) {
-            $result = $this->model->removeCategory($category);
-            $message = ($result > 0) ? "Successfully removed" : "Error removing";
-            $this->view->show("category/categoryremoveform.php", ['mode' => 'add', 'message' => $message]);
-        } else {
-            $message = "Invalid data";
-            $this->view->show("category/categoryremoveform.php", ['mode' => 'add', 'message' => $message]);
-        }
-    }
-
-    public function doProductRemove()
-    {
-        //get all the product data from form and validate it
-        $product = Validator::validateProduct(INPUT_POST);
-        if (!is_null($product)) {  //add product to database after it's validated
-            $result = $this->model->removeProduct($product);
-            $result += $this->model->removeStockByProduct($product);
-            $message = ($result > 0) ? "Successfully removed" : "Error removing";
-            $prodList = $this->model->findAllProducts();
-            $this->view->show("product/productmanage.php", ['message' => $message, 'list' => $prodList]);
-        } else {
-            $message = "Invalid data";
-            $prodList = $this->model->findAllProducts();
-            $this->view->show("product/productmanage.php", ['message' => $message, 'list' => $prodList]);
-        }
-    }
-
-    public function doConfirmCatRemove()
-    {
-        $data = array(); // We iterate the users data array
-        $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
-        if (($id !== false) && (!is_null($id))) {
-            $category = $this->model->findCategoryById($id);
-            if (!is_null($category)) {
-                $data['category'] = $category;
-            }
-        }
-        $this->view->show("category/catdelconfirm.php", $data);
-    }
-
     public function doCategoryRemoveForm(string $mode)
     {
         $data = array();
@@ -551,6 +532,39 @@ class MainController
             $data['mode'] = $mode;
         }
         $this->view->show("category/categoryremoveform.php", $data);  //initial prototype version.
+    }
+
+    public function doCategoryRemove() {
+        $category = Validator::validateCategory(INPUT_POST);
+        if (!is_null($category)) {
+            $result = $this->model->removeCategory($category);
+            $message = ($result > 0) ? "Successfully removed" : "Error removing";
+            
+            //fetch the updated list of categories after the remove operation
+            $updatedCategoryList = $this->model->findAllCategories();
+    
+            //redirect to the category management view with the updated list of categories
+            $this->view->show("category/categorymanage.php", ['message' => $message, 'list' => $updatedCategoryList]);
+        } else {
+            $message = "Invalid data";
+            //if the data was invalid, we can redirect to the form again
+            $this->view->show("category/categoryremoveform.php", ['mode' => 'add', 'message' => $message]);
+        }
+    }
+    
+
+
+    public function doConfirmCatRemove()
+    {
+        $data = array(); // We iterate the users data array
+        $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+        if (($id !== false) && (!is_null($id))) {
+            $category = $this->model->findCategoryById($id);
+            if (!is_null($category)) {
+                $data['category'] = $category;
+            }
+        }
+        $this->view->show("category/catdelconfirm.php", $data);
     }
 
     // END CATEGORY MANAGEMENT CONTROL METHODS 
@@ -586,90 +600,84 @@ class MainController
 
 
     public function doProductAdd()
-{
-    // Check if the form was submitted with data
-    if (
-        isset($_POST['code']) && !empty($_POST['code']) &&
-        isset($_POST['description']) && !empty($_POST['description'])
-        // Add other field checks if necessary
-    ) {
-        $product = Validator::validateProduct(INPUT_POST);
+    {
+        // Check if the form was submitted with data
+        if (
+            isset($_POST['code']) && !empty($_POST['code']) &&
+            isset($_POST['description']) && !empty($_POST['description'])
+            // Add other field checks if necessary
+        ) {
+            $product = Validator::validateProduct(INPUT_POST);
 
-        // If validation is successful
-        if (!is_null($product)) {
-            // Check if category exists
-            $categoryId = $product->getCategoryId();
-            if (!$this->model->categoryExists($categoryId)) {
-                $message = "Invalid category id";
-                $this->view->show("product/productdetail.php", ['mode' => 'add', 'message' => $message, 'product' => $product]);
-                return;
+            // If validation is successful
+            if (!is_null($product)) {
+                // Check if category exists
+                $categoryId = $product->getCategoryId();
+                if (!$this->model->categoryExists($categoryId)) {
+                    $message = "Invalid category id";
+                    $this->view->show("product/productdetail.php", ['mode' => 'add', 'message' => $message, 'product' => $product]);
+                    return;
+                }
+
+                // Add the product if it does not exist yet
+                $result = $this->model->addProduct($product);
+                $message = ($result > 0) ? "Successfully added" : "Product with this code already exists";
+            } else {
+                // In case of validation failure
+                $message = "Invalid data";
             }
 
-            // Add the product if it does not exist yet
-            $result = $this->model->addProduct($product);
-            $message = ($result > 0) ? "Successfully added" : "Product with this code already exists";
+            $this->view->show("product/productdetail.php", ['product' => $product, 'mode' => 'add', 'message' => $message]);
         } else {
-            // In case of validation failure
-            $message = "Invalid data";
+            // If the form was accessed without input data, just show the empty form without any message
+            $this->view->show("product/productdetail.php", ['product' => new Product(), 'mode' => 'add']);
         }
-        
-        $this->view->show("product/productdetail.php", ['product' => $product, 'mode' => 'add', 'message' => $message]);
-    } else {
-        // If the form was accessed without input data, just show the empty form without any message
-        $this->view->show("product/productdetail.php", ['product' => new Product(), 'mode' => 'add']);
     }
-}
 
 
 
 
 
-public function doProductEditForm($action, $params = []) {
-    $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
-    if(is_null($id) || $id === false) {
-        $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
-    }
-    $params['message'] = $_GET['message'] ?? '';
+    public function doProductEditForm($action, $params = [])
+    {
+        $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+        if (is_null($id) || $id === false) {
+            $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
+        }
+        $params['message'] = $_GET['message'] ?? '';
 
-    if (!$this->validateCategoryId($_POST['category_id'] ?? null, $params)) {
-        return;
-    }
-    
-    if($action === 'add') {
-        $params['mode'] = 'add';
-        $params['product'] = new Product();
-    } elseif($action === 'edit' && !empty($id)) {
-        $product = $this->model->findProductById($id);
-        if($product) {
-            $params['mode'] = 'edit';
-            $params['product'] = $product;
+        if (!$this->validateCategoryId($_POST['category_id'] ?? null, $params)) {
+            return;
+        }
+
+        if ($action === 'add') {
+            $params['mode'] = 'add';
+            $params['product'] = new Product();
+        } elseif ($action === 'edit' && !empty($id)) {
+            $product = $this->model->findProductById($id);
+            if ($product) {
+                $params['mode'] = 'edit';
+                $params['product'] = $product;
+            } else {
+                $this->handleError();
+                return;
+            }
         } else {
             $this->handleError();
             return;
         }
-    } else {
-        $this->handleError();
-        return;
-    }
-    $this->view->show('product/productdetail.php', $params);
-}
-
-private function validateCategoryId($categoryId, &$params) {
-    if ($categoryId !== null && !$this->model->categoryExists($categoryId)) {
-        $params['message'] = "Invalid category id";
         $this->view->show('product/productdetail.php', $params);
-        return false;
     }
-    return true;
-}
 
-
-    
-
-
-    
-
-
+    private function validateCategoryId($categoryId, &$params)
+    {
+        if ($categoryId !== null && !$this->model->categoryExists($categoryId)) {
+            $params['message'] = "Invalid category id";
+            $this->view->show('product/productdetail.php', $params);
+            return false;
+        }
+        return true;
+    }
 
 
 
@@ -689,6 +697,29 @@ private function validateCategoryId($categoryId, &$params) {
         }
         $this->view->show("product/productremoveform.php", $data);
     }
+
+    public function doProductRemove()
+    {
+        $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
+
+        // If $id is not null and is a valid integer, proceed with removal
+        if (!is_null($id) && $id !== false) {
+            $product = $this->model->findProductById($id);
+            if (!is_null($product)) {
+                $result = $this->model->removeProduct($product);
+                $result += $this->model->removeStockByProduct($product);
+                $message = ($result > 0) ? "Successfully removed" : "Error removing";
+            } else {
+                $message = "Product not found";
+            }
+        } else {
+            $message = "Invalid data";
+        }
+        
+        $prodList = $this->model->findAllProducts();
+        $this->view->show("product/productmanage.php", ['message' => $message, 'list' => $prodList]);
+    }
+
 
     /*  Note that a confirmation is needed, since it has M:N relationship. 
 
@@ -711,52 +742,52 @@ private function validateCategoryId($categoryId, &$params) {
     }
 
     public function doProductModify()
-{
-    // Get product data from form and validate it
-    $product = Validator::validateProduct(INPUT_POST);
+    {
+        // Get product data from form and validate it
+        $product = Validator::validateProduct(INPUT_POST);
 
-    // Modify product in the database if valid
-    if (!is_null($product)) {
-        // Fetch the existing product from the database
-        $existingProduct = $this->model->findProductById($product->getId());
+        // Modify product in the database if valid
+        if (!is_null($product)) {
+            // Fetch the existing product from the database
+            $existingProduct = $this->model->findProductById($product->getId());
 
-        if (!is_null($existingProduct)) {
-            // Check if category exists
-            $categoryId = $product->getCategoryId();
-            if (!$this->model->categoryExists($categoryId)) {
-                $message = "Invalid category id";
-                $this->view->show("product/productdetail.php", ['mode' => 'edit', 'message' => $message, 'product' => $existingProduct]);
-                return;
-            }
+            if (!is_null($existingProduct)) {
+                // Check if category exists
+                $categoryId = $product->getCategoryId();
+                if (!$this->model->categoryExists($categoryId)) {
+                    $message = "Invalid category id";
+                    $this->view->show("product/productdetail.php", ['mode' => 'edit', 'message' => $message, 'product' => $existingProduct]);
+                    return;
+                }
 
-            // Update the product details
-            // $existingProduct->setCode($product->getCode());
-            // $existingProduct->setDescription($product->getDescription());
-            // $existingProduct->setPrice($product->getPrice());
+                // Update the product details
+                // $existingProduct->setCode($product->getCode());
+                // $existingProduct->setDescription($product->getDescription());
+                // $existingProduct->setPrice($product->getPrice());
 
-            $result = $this->model->modifyProduct($product);
-            $message = ($result > 0) ? "Successfully modified" : "Error modifying";
+                $result = $this->model->modifyProduct($product);
+                $message = ($result > 0) ? "Successfully modified" : "Error modifying";
 
-            if ($result > 0) {
-                // If modification is successful, fetch the modified product again from the database
-                $modifiedProduct = $this->model->findProductById($product->getId());
-                if ($modifiedProduct) {
-                    $this->view->show("product/productdetail.php", ['mode' => 'edit', 'message' => $message, 'product' => $modifiedProduct]);
+                if ($result > 0) {
+                    // If modification is successful, fetch the modified product again from the database
+                    $modifiedProduct = $this->model->findProductById($product->getId());
+                    if ($modifiedProduct) {
+                        $this->view->show("product/productdetail.php", ['mode' => 'edit', 'message' => $message, 'product' => $modifiedProduct]);
+                    } else {
+                        $this->view->show("product/productdetail.php", ['mode' => 'add', 'message' => "Failed to retrieve modified product"]);
+                    }
                 } else {
-                    $this->view->show("product/productdetail.php", ['mode' => 'add', 'message' => "Failed to retrieve modified product"]);
+                    $this->view->show("product/productdetail.php", ['mode' => 'edit', 'message' => $message, 'product' => $existingProduct]);
                 }
             } else {
-                $this->view->show("product/productdetail.php", ['mode' => 'edit', 'message' => $message, 'product' => $existingProduct]);
+                $message = "Product not found";
+                $this->view->show("product/productdetail.php", ['mode' => 'edit', 'message' => $message]);
             }
         } else {
-            $message = "Product not found";
-            $this->view->show("product/productdetail.php", ['mode' => 'edit', 'message' => $message]);
+            $message = "Invalid data";
+            $this->view->show("product/productdetail.php", ['mode' => 'add', 'message' => $message]);
         }
-    } else {
-        $message = "Invalid data";
-        $this->view->show("product/productdetail.php", ['mode' => 'add', 'message' => $message]);
     }
-}
 
 
 
@@ -897,15 +928,29 @@ private function validateCategoryId($categoryId, &$params) {
 
     private function doProductStock()
     {
-        //get the id of the product from the POST data
+        // Get the id of the product from the POST data
         $id = filter_input(INPUT_POST, 'id');
 
-        //perform stock operation on the product
-        //you need to implement the stock operation in your model
+        // Get other necessary information from the POST data
+        $quantity = filter_input(INPUT_POST, 'quantity'); // Replace 'quantity' with the actual field name
+        $warehouse_id = filter_input(INPUT_POST, 'warehouse_id'); // Replace 'warehouse_id' with the actual field name
 
-        //reload the product management page
-        $this->doProductMng();
+        // Perform stock operation on the product. You need to implement the updateStock method in your model.
+        $result = $this->model->updateStock($id, $warehouse_id, $quantity);
+
+        // Check the result of the operation
+        if($result) {
+            // If successful, display success message
+            $message = 'Stock updated successfully.';
+        } else {
+            // If failed, display error message
+            $message = 'Failed to update stock.';
+        }
+
+        // Reload the product management page with the message
+        $this->doProductMng($message);
     }
+
 
 
 

@@ -202,6 +202,28 @@ class WarehouseProductDao {
 	}
 
 
+    public function updateStock(WarehouseProduct $warehouseProduct): int
+    {
+        $result = 0;
+        try {
+            $connection = $this->dbConnect->getConnection(); 
+            $stmt = $connection->prepare($this->queries['UPDATE']);
+            $stmt->bindValue(':wid', $warehouseProduct->getWarehouseId(), \PDO::PARAM_INT);
+            $stmt->bindValue(':pid', $warehouseProduct->getProductId(), \PDO::PARAM_INT);
+            $stmt->bindValue(':stock', $warehouseProduct->getStock(), \PDO::PARAM_INT);
+            $success = $stmt->execute(); 
+            if ($success) {
+                $result = $stmt->rowCount();
+            } else {
+                $result = 0;
+            }
+        } catch (\PDOException $e) {
+            throw $e;
+        }   
+        return $result;
+    }
+
+
     
 }
 

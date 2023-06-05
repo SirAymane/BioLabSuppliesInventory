@@ -7,11 +7,12 @@
 <?php endif ?>
 
 <form method="post">
-    <div class="row g-3 align-items-center">
-        <span class="col-auto">
-            <button class="btn btn-primary" type="submit" name="action" value="category/add">Add</button>
-        </span>
-    </div>
+<div class="row g-3 align-items-center">
+    <span class="col-auto">
+        <a href="index.php?action=category/add" class="btn btn-primary">Add</a>
+    </span>
+</div>
+
 </form>
 
 <?php
