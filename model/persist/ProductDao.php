@@ -1,62 +1,59 @@
 <?php
-namespace proven\store\model\persist;
+namespace SirAymane\ecommerce\model\persist;
 
-require_once 'model/persist/StoreDb.php';
-require_once 'model/Product.php';
+require_once __DIR__ . '/Database.php';
+require_once __DIR__ . './../Product.php';
 
-use proven\store\model\persist\StoreDb as StoreDb;
-use proven\store\model\Product as Product;
-use proven\store\model\Category as Category;
+use SirAymane\ecommerce\model\persist\Database as DbConnect;
+use SirAymane\ecommerce\model\Product as Product;
 
-
+use PDO;
 
 /**
- * Product db persistence class.
+ * Product database persistence class.
  */
 class ProductDao {
-	private StoreDb $dbConnect;
+    private DbConnect $dbConnect;
+    private static string $TABLE_NAME = 'products';
+    private array $queries;
 
-	private static string $TABLE_NAME = 'products';
+    public function __construct() {
+        $this->dbConnect = new DbConnect();
+        $this->queries = array();
+        $this->initQueries();
+    }
 
-	private array $queries;
-
-	public function __construct() {
-		$this->dbConnect = new StoreDb;
-		$this->queries = array();
-		$this->initQueries();
-	}
-
-	private function initQueries() {
-		$this->queries['SELECT_ALL'] = \sprintf(
-			"select * from %s",
-			self::$TABLE_NAME
-		);
-        $this->queries['SELECT_WHERE_ID'] = \sprintf(
-                "select * from %s where id = :id", 
-                self::$TABLE_NAME
-        );
-        $this->queries['SELECT_WHERE_CODE'] = \sprintf(
-            "select * from %s where code = :code", 
+    private function initQueries() {
+        $this->queries['SELECT_ALL'] = sprintf(
+            "SELECT * FROM %s",
             self::$TABLE_NAME
         );
-        $this->queries['INSERT'] = \sprintf(
-                "insert into %s (code, description, price, category_id) values (:code, :description, :price, :category_id)", 
-                self::$TABLE_NAME
+        $this->queries['SELECT_WHERE_ID'] = sprintf(
+            "SELECT * FROM %s WHERE id = :id",
+            self::$TABLE_NAME
         );
-        $this->queries['UPDATE'] = \sprintf(
-                "update %s set code = :code, description = :description, price = :price, category_id = :category_id where id = :id", 
-                self::$TABLE_NAME
+        $this->queries['SELECT_WHERE_CODE'] = sprintf(
+            "SELECT * FROM %s WHERE code = :code",
+            self::$TABLE_NAME
         );
-        $this->queries['DELETE'] = \sprintf(
-                "delete from %s where id = :id", 
-                self::$TABLE_NAME
-		);
-	}
+        $this->queries['INSERT'] = sprintf(
+            "INSERT INTO %s (code, description, price) VALUES (:code, :description, :price)",
+            self::$TABLE_NAME
+        );
+        $this->queries['UPDATE'] = sprintf(
+            "UPDATE %s SET code = :code, description = :description, price = :price WHERE id = :id",
+            self::$TABLE_NAME
+        );
+        $this->queries['DELETE'] = sprintf(
+            "DELETE FROM %s WHERE id = :id",
+            self::$TABLE_NAME
+        );
+    }
 
     /**
-     * selects an entity given its id.
-     * @param entity the entity to search.
-     * @return entity object being searched or null if not found or in case of error.
+     * Selects an entity given its id.
+     * @param Product the entity to search.
+     * @return Product object being searched or null if not found or in case of error.
      */
     public function select(Product $entity): ?Product {
         $data = null;
@@ -120,7 +117,7 @@ class ProductDao {
                     $stmt->setFetchMode(\PDO::FETCH_ASSOC);
                     $data = $stmt->fetchAll();
                     $data = array_map(function ($row) {
-                        return new Product($row['id'], $row['code'], $row['description'], $row['price'], $row['category_id']);
+                        return new Product($row['id'], $row['code'], $row['description'], $row['price']);
                     }, $data);
                 } else {
                     $data = array();
@@ -138,82 +135,91 @@ class ProductDao {
     }
 
     /**
-     * selects entitites in database where field value.
-     * return array of entity objects.
+     * Selects entities in the database where a field value matches precisely.
+     * Useful for searching with total matches.
+     *
+     * @param string $fieldName The name of the field to search in.
+     * @param string $fieldValue The term to search for.
+     * @return array An array of Product objects that match the criteria.
      */
-    public function selectWhere(string $fieldname, string $fieldvalue): array {
+    public function selectWhere(string $fieldName, string $fieldValue): array {
         $data = array();
         try {
-            //PDO object creation.
-            $connection = $this->dbConnect->getConnection(); 
-            //query preparation.
-            $query = sprintf("select * from %s where %s = '%s'", 
-                self::$TABLE_NAME, $fieldname, $fieldvalue);
+            // PDO object creation.
+            $connection = $this->dbConnect->getConnection();
+            // Query preparation.
+            $query = sprintf("SELECT * FROM %s WHERE %s = :fieldValue", self::$TABLE_NAME, $fieldName);
             $stmt = $connection->prepare($query);
-            //query execution.
-            $success = $stmt->execute(); //bool
-            //Statement data recovery.
+            $stmt->bindParam(':fieldValue', $fieldValue, PDO::PARAM_STR);
+            // Query execution.
+            $success = $stmt->execute(); // bool
+            // Statement data recovery.
             if ($success) {
-                if ($stmt->rowCount()>0) {
-                    $stmt->setFetchMode(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, Product::class);
-                    $data = $stmt->fetchAll(); 
-                    // //or in one single sentence:
-                    //$data = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Product');
-                } else {
-                    $data = array();
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $product = new Product(
+                        $row['id'],
+                        $row['code'],
+                        $row['description'],
+                        $row['price']
+                    );
+                    $data[] = $product;
                 }
-            } else {
-                $data = array();
             }
         } catch (\PDOException $e) {
-//            print "Error Code <br>".$e->getCode();
-//            print "Error Message <br>".$e->getMessage();
-//            print "Strack Trace <br>".nl2br($e->getTraceAsString());
+            // Handle the exception or log it.
+            // You can add error handling logic here if needed.
             $data = array();
-        }   
-        return $data;   
+        }
+        return $data;
     }
 
-    public function selectByCategory(Category $category): ?array {
-        $result = null; 
+
+
+    /**
+     * Selects products from the database where a specific field matches a value using a LIKE query.
+     * Useful for searching with partial matches.
+     * 
+     * @param string $fieldname The name of the field to search in.
+     * @param string $searchTerm The term to search for.
+     * @return array An array of Product objects that match the criteria.
+     */
+    public function selectWhereLike(string $fieldname, string $searchTerm): array {
+        $data = [];
         try {
-            $connection = $this->dbConnect->getConnection(); 
-            $query = "SELECT * FROM products WHERE category_id = :category;";
-            $stmt =  $connection->prepare($query);
-            $stmt->bindValue(":category", $category->getId(), \PDO::PARAM_INT);
-            if ($stmt->execute()) {
-                $result = array();
-                while ($product = $this->fetchToProduct($stmt)) {
-                    array_push($result, $product);
-                }
+            $connection = $this->dbConnect->getConnection();
+            $query = sprintf("SELECT * FROM %s WHERE %s LIKE :searchTerm", self::$TABLE_NAME, $fieldname);
+            $stmt = $connection->prepare($query);
+            $stmt->bindValue(':searchTerm', '%' . $searchTerm . '%', \PDO::PARAM_STR);
+            $stmt->execute();
+            while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+                $data[] = new Product($row['id'], $row['code'], $row['description'], $row['price']);
             }
-        } catch (\PDOException $ex) {
-            throw $ex;
+        } catch (\PDOException $e) {
+            // Handle any PDO exceptions here
+            $data = [];
         }
-        return $result;
+        return $data;
     }
-    
 
 
     /**
      * inserts a new entity in database.
      * @param entity the entity object to insert.
-     * @return number of rows affected.
+     * @return int of rows affected.
      */
     public function insert(Product $entity): int {
         $numAffected = 0;
         try {
-            //PDO object creation.
-            $connection = $this->dbConnect->getConnection(); 
-            //query preparation.
+            // PDO object creation.
+            $connection = $this->dbConnect->getConnection();
+            // Query preparation.
             $stmt = $connection->prepare($this->queries['INSERT']);
             $stmt->bindValue(':code', $entity->getCode(), \PDO::PARAM_STR);
             $stmt->bindValue(':description', $entity->getDescription(), \PDO::PARAM_STR);
             $stmt->bindValue(':price', $entity->getPrice(), \PDO::PARAM_STR);
-            $stmt->bindValue(':category_id', $entity->getCategoryId(), \PDO::PARAM_STR);
-            //query execution.
-            $success = $stmt->execute(); //bool
-            $numAffected = $success ? $stmt->rowCount() : 0;
+            // Query execution.
+            $stmt->execute(); //bool
+            return $stmt->rowCount();
         } catch (\PDOException $e) {
             // print "Error Code <br>".$e->getCode();
             // print "Error Message <br>".$e->getMessage();
@@ -222,24 +228,18 @@ class ProductDao {
         }
         return $numAffected;
     }
-/**
-     * updates entity in database.
-     * @param entity the entity object to update.
-     * @return number of rows affected.
-     */
+
     public function update(Product $entity): int {
-        $numAffected = 0;
         try {
-            //PDO object creation.
-            $connection = $this->dbConnect->getConnection(); 
-            //query preparation.
+            // PDO Object creation
+            $connection = $this->dbConnect->getConnection();
+            // Query preparation
             $stmt = $connection->prepare($this->queries['UPDATE']);
+            $stmt->bindValue(':id', $entity->getId(), \PDO::PARAM_INT);
             $stmt->bindValue(':code', $entity->getCode(), \PDO::PARAM_STR);
             $stmt->bindValue(':description', $entity->getDescription(), \PDO::PARAM_STR);
             $stmt->bindValue(':price', $entity->getPrice(), \PDO::PARAM_STR);
-            $stmt->bindValue(':category_id', $entity->getCategoryId(), \PDO::PARAM_INT);
-            $stmt->bindValue(':id', $entity->getId(), \PDO::PARAM_INT);
-            //query execution.
+            // Query execution
             $success = $stmt->execute(); //bool
             $numAffected = $success ? $stmt->rowCount() : 0;
         } catch (\PDOException $e) {
@@ -251,13 +251,12 @@ class ProductDao {
         }
         return $numAffected;  
     }
-
-
+    
 
     /**
      * deletes entity from database.
      * @param entity the entity object to delete.
-     * @return number of rows affected.
+     * @return int of rows affected.
      */
     public function delete(Product $entity): int {
         $numAffected = 0;
@@ -276,28 +275,24 @@ class ProductDao {
             $numAffected = 0;
         }
         return $numAffected;        
-    }    
+    } 
 
-     /**
-     * gets data from resultset and builds a product object with retrieved data
-     * @param type $statement the resultset to get data from
-     * @return mixed the object with read data or false in case of error
+    /**
+     * Fetches data from the result set and builds a product object.
+     * @param $statement The statement with query data.
+     * @return Product|null The product object or null in case of error.
      */
-    public function fetchToProduct($statement): mixed {
+    private function fetchToProduct($statement): ?Product {
         $row = $statement->fetch();
         if ($row) {
-            $id = $row['id'];
-            $code = $row['code'];
-            $description = $row['description'];
-            $price = $row['price'];
-            $categoryId = $row['category_id']; // Make sure your database column is named 'category_id'
-            return new Product($id, $code, $description, $price, $categoryId);
+            return new Product(
+                intval($row['id']),
+                $row['code'],
+                $row['description'],
+                floatval($row['price'])
+            );
         } else {
-            return false;
+            return null;
         }
     }
-    
-
-
 }
-?>

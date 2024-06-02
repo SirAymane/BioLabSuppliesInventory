@@ -1,32 +1,38 @@
 <?php  
-namespace proven\lib;
+namespace SirAymane\ecommerce\lib;
+
 /**
- * template view loader.
- * @author ProvenSoft
+ * Template view loader.
  */
 class ViewLoader {
     
-    function __construct() {
-
+    public function __construct() {
+        // Constructor logic if needed
     }
- 
+
     /**
-     * shows the template view with the provided information.
-     * @param type $template template for the view.
-     * @param type $params associative array of parameters that have to be passed to the template.
-     * @return boolean. In case of error, it returns false.
+     * Shows the template view with the provided information.
+     * @param string $template Template for the view.
+     * @param array $params Associative array of parameters to be passed to the template.
+     * @return bool Returns true if the template is successfully included, otherwise false.
      */
     public function show($template, $params = array()) {
-        //build template path.
-        $path = 'views/' . $template;
-        //if the file is not found, return a 404 error.
+        // Build the full path for the template
+        $path = __DIR__ . '/../views/' . $template;
+
+        // Check if the file exists
         if (!file_exists($path)) {
-            trigger_error ('Template `' . $path . '` does not exist.', E_USER_NOTICE);
+            // Handle the error, e.g., log it or display a user-friendly error
+            trigger_error('Template `' . $path . '` does not exist.', E_USER_NOTICE);
             return false;
-        }         
-        //include the template.
+        }
+
+        // Extract the parameters to make them available in the template
+        extract($params);
+
+        // Include the template file
         include($path);
+
         return true;
     }
 }
-

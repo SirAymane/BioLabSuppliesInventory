@@ -1,0 +1,119 @@
+/* Custom CSS styles */
+
+/* Body styles */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f5f5f5;
+    color: #333;
+    padding: 20px;
+}
+
+/* Navbar styles */
+.navbar {
+    background-color: #212121;
+    color: #fff;
+}
+
+.navbar-brand {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.navbar-nav .nav-link {
+    color: #fff;
+}
+
+/* Table styles */
+.table {
+    width: 100%;
+    margin-bottom: 20px;
+    margin-top: 20px;
+    background-color: #fff;
+    color: #333;
+}
+
+.table th,
+.table td {
+    padding: 10px;
+    text-align: left;
+}
+
+.table th {
+    background-color: #424242;
+    color: #fff;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: #f2f2f2;
+}
+
+/* Button styles */
+.btn-primary {
+    background-color: #8e24aa;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    background-color: #6a1b9a;
+}
+
+/* Form styles */
+.form-control {
+    width: 100%;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    background-color: #f9f9f9;
+    color: #333;
+}
+
+/* Alert styles */
+.alert {
+    padding: 10px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+    margin-top: 20px;
+}
+
+.alert-info {
+    background-color: #e1f5fe;
+    color: #333;
+    margin-top: 20px;
+}
+
+.alert-warning {
+    background-color: #fff3e0;
+    color: #333;
+    margin-top: 20px;
+}
+
+.alert-danger {
+    background-color: #e53935;
+    color: #fff;
+    margin-top: 20px;
+}
+
+/* Custom CSS styles for empty cart message */
+.empty-cart-message {
+    padding: 20px;
+    background-color: #ffc107;
+    color: #333;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    margin-top: 20px;
+}
+
+.empty-cart-message p {
+    margin: 0;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+#order-title{
+    margin-top: 20px;
+    margin-bottom: 20px;
+}

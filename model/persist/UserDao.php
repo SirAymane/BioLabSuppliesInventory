@@ -1,323 +1,272 @@
 <?php
-namespace proven\store\model\persist;
 
-require_once 'model/persist/StoreDb.php';
-require_once 'model/User.php';
+namespace SirAymane\ecommerce\model\persist;
 
-use proven\store\model\persist\StoreDb as DbConnect;
-use proven\store\model\User as User;
+require_once __DIR__ . '/Database.php';
+require_once __DIR__ . './../User.php';
+
+
+
+use SirAymane\ecommerce\model\persist\Database as DbConnect;
+use SirAymane\ecommerce\model\User as User;
 
 /**
  * User database persistence class.
- * @author ProvenSoft
  */
-class UserDao {
-
-    /**
-     * Encapsulates connection data to database.
-     */
+class UserDao
+{
     private DbConnect $dbConnect;
-    /**
-     * table name for entity.
-     */
     private static string $TABLE_NAME = 'users';
-    /**
-     * queries to database.
-     */
     private array $queries;
-    
-    /**
-     * constructor.
-     */
-    public function __construct() { 
+
+    public function __construct()
+    {
         $this->dbConnect = new DbConnect();
         $this->queries = array();
-        $this->initQueries();    
+        $this->initQueries();
     }
 
-    // Initialize the query
-    private function initQueries() {
-        //query definition.
-        $this->queries['SELECT_ALL'] = \sprintf(
-                "select * from %s", 
-                self::$TABLE_NAME
-        );
-        $this->queries['SELECT_WHERE_ID'] = \sprintf(
-                "select * from %s where id = :id", 
-                self::$TABLE_NAME
-        );
-        $this->queries['SELECT_WHERE_USERNAME'] = \sprintf(
-            "select * from %s where username = :username", 
+    private function initQueries()
+    {
+
+        $this->queries['SELECT_ALL'] = sprintf("SELECT * FROM %s", self::$TABLE_NAME);
+
+        $this->queries['SELECT_WHERE_ID'] = sprintf("SELECT * FROM %s WHERE id = :id", self::$TABLE_NAME);
+
+        $this->queries['SELECT_WHERE_USERNAME_AND_PASSWORD'] = sprintf(
+            "SELECT * FROM %s WHERE username = :username AND password = :password",
             self::$TABLE_NAME
         );
-        $this->queries['SELECT_WHERE_USERNAME_AND_PASSWORD'] = \sprintf(
-            "select * from %s where username = :username and password = :password", 
+        $this->queries['INSERT'] = sprintf(
+            "INSERT INTO %s (username, password, role, email, dob) VALUES (:username, :password, :role, :email, :dob)",
             self::$TABLE_NAME
         );
-        $this->queries['INSERT'] = \sprintf(
-                "insert into %s (username, password, firstname, lastname, role) values (:username, :password, :firstname, :lastname, :role)", 
-                self::$TABLE_NAME
+        $this->queries['UPDATE'] = sprintf(
+            "UPDATE %s SET username = :username, password = :password, role = :role, email = :email, dob = :dob WHERE id = :id",
+            self::$TABLE_NAME
         );
-        $this->queries['UPDATE'] = \sprintf(
-                "update %s set username = :username, password = :password, firstname = :firstname, lastname = :lastname, role= :role where id = :id", 
-                self::$TABLE_NAME
+        $this->queries['DELETE'] = sprintf(
+            "DELETE FROM %s WHERE id = :id",
+            self::$TABLE_NAME
         );
-        $this->queries['DELETE'] = \sprintf(
-                "delete from %s where id = :id", 
-                self::$TABLE_NAME
-        );              
     }
 
     /**
-     * fetches a row from PDOStatement and converts it into an entity object.
-     * @param $statement the statement with query data.
-     * @return entity object with retrieved data or false in case of error.
+     * Convert database row to User entity
+     *
+     * @param $statement
+     * @return User|null
      */
-    private function fetchToEntity($statement): mixed {
+    private function fetchToEntity($statement): ?User
+    {
         $row = $statement->fetch();
         if ($row) {
-            $id = intval($row['id']);
-            $username = $row['username'];
-            $password = $row['password'];
-            $firstname = $row['firstname'];
-            $lastname = $row['lastname'];
-            $role = $row['role'];
-            return new User($id, $username, $password, $firstname, $lastname, $role);
+            $dob = $row['dob'] ? new \DateTime($row['dob']) : null; // Handle null dob values
+            $user = new User(
+                $row['id'],
+                $row['username'],
+                null, // Set password to null here, as it's already hashed in the database
+                $row['role'],
+                $row['email'],
+                $dob
+            );
+            return $user;
         } else {
-            return false;
+            return null;
         }
-    }    
-    
-    /**
-     * selects an entity given its id.
-     * @param entity the entity to search.
-     * @return entity object being searched or null if not found or in case of error.
-     */
-    public function select(User $entity): ?User {
-        $data = null;
+    }
+
+    public function select(User $entity): ?User
+    {
         try {
-            //PDO object creation.
-            $connection = $this->dbConnect->getConnection(); 
-            //query preparation.
+            $connection = $this->dbConnect->getConnection();
             $stmt = $connection->prepare($this->queries['SELECT_WHERE_ID']);
             $stmt->bindValue(':id', $entity->getId(), \PDO::PARAM_INT);
-            //query execution.
-            $success = $stmt->execute(); //bool
-            //Statement data recovery.
-            if ($success) {
-                if ($stmt->rowCount()>0) {
-                    // //set fetch mode.
-                    // $stmt->setFetchMode(\PDO::FETCH_ASSOC);
-                    // // get one row at the time
-                    // if ($u = $this->fetchToEntity($stmt)){
-                    //     $data = $u;
-                    // }
-                    $stmt->setFetchMode(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, User::class);
-                    $data = $stmt->fetch();
-                } else {
-                    $data = null;
-                }
-            } else {
-                $data = null;
-            }
-
+            $stmt->execute();
+            return $this->fetchToEntity($stmt);
         } catch (\PDOException $e) {
-            // print "Error Code <br>".$e->getCode();
-            // print "Error Message <br>".$e->getMessage();
-            // print "Strack Trace <br>".nl2br($e->getTraceAsString());
-            $data = null;
-        }   
-        return $data;
+            // Error handling
+            return null;
+        }
     }
 
     /**
-     * selects all entities in database.
-     * return array of entity objects.
+     * Selects entities in the database where a specific field matches a value.
+     *
+     * @param string $fieldname The name of the field to search.
+     * @param string $fieldvalue The value to match in the specified field.
+     * @return array|null An array of entity objects that match the criteria or null if none are found.
      */
-    public function selectAll(): array {
-        $data = array();
+    public function selectWhere(string $fieldname, string $fieldvalue): ?array
+    {
         try {
-            //PDO object creation.
-            $connection = $this->dbConnect->getConnection(); 
-            //query preparation.
-            $stmt = $connection->prepare($this->queries['SELECT_ALL']);
-            //query execution.
-            $success = $stmt->execute(); //bool
-            //Statement data recovery.
-            if ($success) {
-                if ($stmt->rowCount()>0) {
-                   //fetch in class mode and get array with all data.                   
-                    $stmt->setFetchMode(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, User::class);
-                    $data = $stmt->fetchAll(); 
-                    //or in one single sentence:
-                    // $data = $stmt->fetchAll(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, User::class);
-                } else {
-                    $data = array();
-                }
-            } else {
-                $data = array();
-            }
-        } catch (\PDOException $e) {
-            print "Error Code <br>".$e->getCode();
-            print "Error Message <br>".$e->getMessage();
-            print "Stack Trace <br>".nl2br($e->getTraceAsString());
-            $data = array();
-        }   
-        return $data;   
-    }
-
-    /**
-     * selects entities in the database where field value.
-     * return array of entity objects.
-     */
-    public function selectWhere(string $fieldname, string $fieldvalue): array {
-        $data = array();
-        try {
-            //PDO object creation.
-            $connection = $this->dbConnect->getConnection(); 
-            //query preparation.
-            $query = sprintf("select * from %s where %s = '%s'", 
-                self::$TABLE_NAME, $fieldname, $fieldvalue);
+            $connection = $this->dbConnect->getConnection();
+            $query = sprintf("SELECT * FROM %s WHERE %s = :value", self::$TABLE_NAME, $fieldname);
             $stmt = $connection->prepare($query);
-            //query execution.
-            $success = $stmt->execute(); //bool
-            //Statement data recovery.
-            if ($success) {
-                if ($stmt->rowCount()>0) {
-                    $stmt->setFetchMode(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, User::class);
-                    $data = $stmt->fetchAll(); 
-                    // //or in one single sentence:
-                    //$data = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'User');
-                } else {
-                    $data = array();
-                }
-            } else {
-                $data = array();
+            $stmt->bindValue(':value', $fieldvalue, \PDO::PARAM_STR);
+            $stmt->execute();
+
+            return $stmt->fetchAll(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, User::class) ?: null;
+        } catch (\PDOException $e) {
+            // Error handling
+            return null;
+        }
+    }
+
+    public function selectAll(): array
+    {
+        try {
+            $connection = $this->dbConnect->getConnection();
+            $stmt = $connection->prepare($this->queries['SELECT_ALL']);
+            $stmt->execute();
+
+            // Fetch all rows as associative arrays with string dates
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            // Initialize an empty array to store User objects
+            $users = array();
+
+            foreach ($rows as $row) {
+                // Create a new User object and populate its properties
+                $dob = $row['dob'] ? new \DateTime($row['dob']) : null; // Handle null dob values
+                $user = new User($row['id'], $row['username'], null, $row['role'], $row['email'], $dob);
+                $user->setRawPassword($row['password']); // Set the password without hashing
+
+                // Add the User object to the array
+                $users[] = $user;
             }
+
+            return $users;
         } catch (\PDOException $e) {
-//            print "Error Code <br>".$e->getCode();
-//            print "Error Message <br>".$e->getMessage();
-//            print "Strack Trace <br>".nl2br($e->getTraceAsString());
-            $data = array();
-        }   
-        return $data;   
+            // Error handling
+            return array();
+        }
     }
 
     /**
-     * inserts a new entity in database.
-     * @param entity the entity object to insert.
-     * @return number of rows affected.
+     * Finds a user by their username.
+     * @param string $username The username to search for.
+     * @return User|null The found user, or null if not found.
      */
-    public function insert(User $entity): int {
-        $numAffected = 0;
+    public function findByUsername(string $username): ?User
+    {
         try {
-            //PDO object creation.
-            $connection = $this->dbConnect->getConnection(); 
-            //query preparation.
-            $stmt = $connection->prepare($this->queries['INSERT']);
-            $stmt->bindValue(':username', $entity->getUsername(), \PDO::PARAM_STR);
-            $stmt->bindValue(':password', $entity->getPassword(), \PDO::PARAM_STR);
-            $stmt->bindValue(':firstname', $entity->getFirstname(), \PDO::PARAM_STR);
-            $stmt->bindValue(':lastname', $entity->getLastname(), \PDO::PARAM_STR);
-            $stmt->bindValue(':role', $entity->getRole(), \PDO::PARAM_STR);
-            //query execution.
-            $success = $stmt->execute(); //bool
-            $numAffected = $success ? $stmt->rowCount() : 0;
+            $connection = $this->dbConnect->getConnection();
+            $stmt = $connection->prepare("SELECT * FROM " . self::$TABLE_NAME . " WHERE username = :username");
+            $stmt->bindValue(':username', $username, \PDO::PARAM_STR);
+            $stmt->execute();
+            return $this->fetchToEntity($stmt);
         } catch (\PDOException $e) {
-            print "Error Code <br>".$e->getCode();
-            print "Error Message <br>".$e->getMessage();
-            print "Strack Trace <br>".nl2br($e->getTraceAsString());
-            $numAffected = 0;
+            // Error handling
+            return null;
         }
-        return $numAffected;
     }
 
     /**
-     * updates entity in database.
-     * @param entity the entity object to update.
-     * @return number of rows affected.
+     * Validates a user's login credentials.
+     * This method now uses the 'SELECT_WHERE_USERNAME_AND_PASSWORD' query for authentication.
      */
-    public function update(User $entity): int {
-        $numAffected = 0;
+    public function validateCredentials(string $username, string $password): ?User
+    {
         try {
-            //PDO object creation
-            $connection = $this->dbConnect->getConnection(); 
-            //Query preparation
-            $stmt = $connection->prepare($this->queries['UPDATE']);
-            $stmt->bindValue(':username', $entity->getUsername(), \PDO::PARAM_STR);
-            $stmt->bindValue(':password', $entity->getPassword(), \PDO::PARAM_STR);
-            $stmt->bindValue(':firstname', $entity->getFirstname(), \PDO::PARAM_STR);
-            $stmt->bindValue(':lastname', $entity->getLastname(), \PDO::PARAM_STR);
-            $stmt->bindValue(':role', $entity->getRole(), \PDO::PARAM_STR);
-            $stmt->bindValue(':id', $entity->getId(), \PDO::PARAM_INT);
-            //Query execution
-            $success = $stmt->execute(); //bool
-            $numAffected = $success ? $stmt->rowCount() : 0;
-        } catch (\PDOException $e) {
-            // print "Error Code <br>".$e->getCode();
-            // print "Error Message <br>".$e->getMessage();
-            // print "Strack Trace <br>".nl2br($e->getTraceAsString());
-            $numAffected = 0;
-        }
-        return $numAffected;  
-    }
-
-    /**
-     * deletes entity from database.
-     * @param entity the entity object to delete.
-     * @return number of rows affected.
-     */
-    public function delete(User $entity): int {
-        $numAffected = 0;
-        try {
-            //PDO object creation.
-            $connection = $this->dbConnect->getConnection(); 
-            //query preparation.            
-            $stmt = $connection->prepare($this->queries['DELETE']);
-            $stmt->bindValue(':id', $entity->getId(), \PDO::PARAM_INT);
-            $success = $stmt->execute(); //bool
-            $numAffected = $success ? $stmt->rowCount() : 0;
-        } catch (\PDOException $e) {
-            // print "Error Code <br>".$e->getCode();
-            // print "Error Message <br>".$e->getMessage();
-            // print "Strack Trace <br>".nl2br($e->getTraceAsString());
-            $numAffected = 0;
-        }
-        return $numAffected;        
-    }    
-    
-    public function selectWhereUsernameAndPassword (string $username, string $password) {
-        $data = null;
-        try {
-            //PDO object creation.
-            $connection = $this->dbConnect->getConnection(); 
-            //query preparation.
+            $connection = $this->dbConnect->getConnection();
             $stmt = $connection->prepare($this->queries['SELECT_WHERE_USERNAME_AND_PASSWORD']);
             $stmt->bindValue(':username', $username, \PDO::PARAM_STR);
             $stmt->bindValue(':password', $password, \PDO::PARAM_STR);
-            //query execution.
-            $success = $stmt->execute(); //bool
-            //Statement data recovery.
-            if ($success) {
-                if ($stmt->rowCount()>0) {
-                   //fetch in class mode and get array with all data.                   
-                    $stmt->setFetchMode(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, User::class);
-                    $data = $stmt->fetch(); 
-                    //or in one single sentence:
-                    // $data = $stmt->fetchAll(\PDO::FETCH_CLASS | \PDO::FETCH_PROPS_LATE, User::class);
-                } else {
-                    $data = null;
-                }
-            } else {
-                $data = null;
-            }
+            $stmt->execute();
+            return $this->fetchToEntity($stmt);
         } catch (\PDOException $e) {
-            print "Error Code <br>".$e->getCode();
-            print "Error Message <br>".$e->getMessage();
-            print "Stack Trace <br>".nl2br($e->getTraceAsString());
-            $data = null;
-        }   
-        return $data;   
+            // Error handling
+            return null;
+        }
     }
-    
+
+    /**
+     * Inserts a new user into the database.
+     * @param User $entity The user entity to insert.
+     * @return int The number of rows affected.
+     */
+    public function insert(User $entity): int
+    {
+        try {
+            $connection = $this->dbConnect->getConnection();
+            $stmt = $connection->prepare($this->queries['INSERT']);
+
+            // Binding the parameters
+            $stmt->bindValue(':username', $entity->getUsername(), \PDO::PARAM_STR);
+            $stmt->bindValue(':password', $entity->getPassword(), \PDO::PARAM_STR);
+            $stmt->bindValue(':role', $entity->getRole(), \PDO::PARAM_STR);
+            $stmt->bindValue(':email', $entity->getEmail(), \PDO::PARAM_STR);
+            $stmt->bindValue(':dob', $entity->getDob()->format('Y-m-d'), \PDO::PARAM_STR);
+
+            $stmt->execute();
+            return $stmt->rowCount();
+        } catch (\PDOException $e) {
+            // Error handling
+            return 0;
+        }
+    }
+
+    /**
+     * Updates an existing user in the database.
+     * @param User $entity The user entity to update.
+     * @return int The number of rows affected.
+     */
+    public function update(User $entity): int
+    {
+        try {
+            $connection = $this->dbConnect->getConnection();
+            $stmt = $connection->prepare($this->queries['UPDATE']);
+
+            // Binding the parameters
+            $stmt->bindValue(':username', $entity->getUsername(), \PDO::PARAM_STR);
+            $stmt->bindValue(':password', $entity->getPassword(), \PDO::PARAM_STR);
+            $stmt->bindValue(':role', $entity->getRole(), \PDO::PARAM_STR);
+            $stmt->bindValue(':email', $entity->getEmail(), \PDO::PARAM_STR);
+            $stmt->bindValue(':dob', $entity->getDob()->format('Y-m-d'), \PDO::PARAM_STR);
+            $stmt->bindValue(':id', $entity->getId(), \PDO::PARAM_INT);
+
+            $stmt->execute();
+            return $stmt->rowCount();
+        } catch (\PDOException $e) {
+            // Error handling
+            return 0;
+        }
+    }
+
+    /**
+     * Deletes a user from the database.
+     * @param User $entity The user entity to delete.
+     * @return int The number of rows affected.
+     */
+    public function delete(User $entity): int
+    {
+        try {
+            $connection = $this->dbConnect->getConnection();
+            $stmt = $connection->prepare($this->queries['DELETE']);
+
+            // Binding the parameter
+            $stmt->bindValue(':id', $entity->getId(), \PDO::PARAM_INT);
+
+            $stmt->execute();
+            return $stmt->rowCount();
+        } catch (\PDOException $e) {
+            // Error handling
+            return 0;
+        }
+    }
+
+    /**
+     * Get an instance of UserDao (Singleton pattern).
+     *
+     * @return UserDao
+     */
+    public static function getInstance(): UserDao
+    {
+        static $instance = null;
+        if ($instance === null) {
+            $instance = new UserDao();
+        }
+        return $instance;
+    }
 }
